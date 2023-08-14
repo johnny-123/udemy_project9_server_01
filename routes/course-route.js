@@ -24,9 +24,25 @@ router.get("/", async (req, res) => {
 router.get("/findByName/:name", async (req, res) => {
   let { name } = req.params;
   try {
-    let foundCourse = await Course.find({ title: { $regex: name } })
+    let userID = req.user._id.toString();
+    let foundCourse = await Course.find({
+      $and: [
+        { title: { $regex: name } },
+        {
+          students: {
+            $ne: userID,
+          },
+        },
+      ],
+    })
       .populate("instructor", ["username,email"])
       .exec();
+    console.log(userID);
+    console.log(foundCourse);
+    // let showFoundCourse = []
+    // for(let i = 0;i < foundCourse.length;i++){
+    //   if(foundCourse[0].students)
+    // }
     return res.send(foundCourse);
   } catch (e) {
     return res.status(500).send(e);
@@ -136,6 +152,39 @@ router.patch("/:_id", async (req, res) => {
     } else {
       return res.status(403).send("只有此課程的講師才能編輯課程。");
     }
+  } catch (e) {
+    return res.status(500).send(e);
+  }
+});
+
+router.patch("/student/:_id", async (req, res) => {
+  let { _id } = req.params;
+  // 確認課程存在
+  try {
+    let courseFound = await Course.findOne({ _id }).exec();
+    if (!courseFound) {
+      return res.status(400).send("找不到課程。無法退出該課程。");
+    }
+    // 使用者必須有註冊該課程才可退出
+    let newStudentList = [];
+    console.log(courseFound.students.length);
+    for (let i = 0; i < courseFound.students.length; i++) {
+      if (courseFound.students[i] === req.user._id.toString()) {
+        console.log("要移除的學生ID為:" + req.user._id);
+      } else {
+        newStudentList.push(courseFound.students[i]);
+      }
+    }
+    console.log(newStudentList);
+    let updateCourse = await Course.findOneAndUpdate(
+      { _id },
+      { students: newStudentList },
+      {
+        new: true,
+        runValidator: true,
+      }
+    ).exec();
+    return res.send({ msg: "課程更新成功", updateCourse });
   } catch (e) {
     return res.status(500).send(e);
   }
